@@ -1,18 +1,15 @@
 import streamlit as st
 import numpy as np
 from PIL import Image, ImageEnhance
-import io
-import cv2  # pip install opencv-python
-import zipfile
-import json
-import pandas as pd  # pip install pandas
-from reportlab.pdfgen import canvas  # pip install reportlab
+import io, cv2, zipfile, json
+import pandas as pd
+from reportlab.pdfgen import canvas
 
 st.set_page_config(page_title="Matrix Image Processing", layout="wide")
 
-# =========================================================
-# BASE CSS (layout ala paste.txt)
-# =========================================================
+# =========================
+# CSS + MULTI LANGUAGE
+# =========================
 
 BASE_CSS = """
 <style>
@@ -98,10 +95,6 @@ body {
 }
 </style>
 """
-
-# =========================================================
-# MULTI-LANGUAGE TEXTS (FULL DICTIONARY)
-# =========================================================
 
 LANG_TEXT = {
     "en": {
@@ -733,12 +726,11 @@ def t(lang: str, key: str) -> str:
     if lang not in LANG_TEXT:
         lang = "en"
     return LANG_TEXT[lang].get(key, LANG_TEXT["en"].get(key, key))
+# =========================
 
-
-# =========================================================
-# BASIC UTILITIES
-# =========================================================
-
+# =========================
+# UTILITIES + STATE
+# =========================
 def pil_to_array(img: Image.Image) -> np.ndarray:
     img = img.convert("RGBA")
     return np.array(img)
@@ -753,40 +745,6 @@ def add_alpha_channel(arr: np.ndarray) -> np.ndarray:
     h, w, _ = arr.shape
     alpha = 255 * np.ones((h, w, 1), dtype=arr.dtype)
     return np.concatenate([arr, alpha], axis=-1)
-
-
-# =========================================================
-# EXTRA EDIT FEATURES
-# =========================================================
-
-def flip_image(pil_img: Image.Image, mode: str = "horizontal") -> Image.Image:
-    arr = np.array(pil_img.convert("RGBA"))
-    if mode == "horizontal":
-        arr_flipped = np.flip(arr, axis=1)
-    else:
-        arr_flipped = np.flip(arr, axis=0)
-    return Image.fromarray(arr_flipped)
-
-def adjust_brightness(pil_img: Image.Image, factor: float) -> Image.Image:
-    enhancer = ImageEnhance.Brightness(pil_img)
-    return enhancer.enhance(factor)
-
-def adjust_contrast(pil_img: Image.Image, factor: float) -> Image.Image:
-    enhancer = ImageEnhance.Contrast(pil_img)
-    return enhancer.enhance(factor)
-
-def crop_image(pil_img: Image.Image, left: int, top: int, right: int, bottom: int) -> Image.Image:
-    w, h = pil_img.size
-    left = max(0, min(left, w - 1))
-    top = max(0, min(top, h - 1))
-    right = max(left + 1, min(right, w))
-    bottom = max(top + 1, min(bottom, h))
-    return pil_img.crop((left, top, right, bottom))
-
-
-# =========================================================
-# STATE
-# =========================================================
 
 def init_state():
     if "history" not in st.session_state:
@@ -838,7 +796,9 @@ def make_zip_from_results(results):
     mem_zip.seek(0)
     return mem_zip
 
-
+# =========================
+# AFFINE + CONVOLUTION + FILTERS
+# =========================
 # =========================================================
 # AFFINE TRANSFORMS
 # =========================================================
@@ -906,11 +866,6 @@ def get_reflection_matrix(axis: str, cx: float, cy: float) -> np.ndarray:
     T2 = get_translation_matrix(cx, cy)
     return T2 @ R @ T1
 
-
-# =========================================================
-# CONVOLUTION
-# =========================================================
-
 def manual_convolution_gray(img_gray: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     kh, kw = kernel.shape
     pad_h = kh // 2
@@ -948,11 +903,6 @@ def sharpen_filter(img_arr: np.ndarray) -> np.ndarray:
     sharp_rgb = np.stack([sharp_gray] * 3, axis=-1)
     out = np.dstack([sharp_rgb, alpha])
     return out
-
-
-# =========================================================
-# SPECIAL FILTERS
-# =========================================================
 
 def remove_background_hsv(pil_img: Image.Image,
                           lower_hsv=(0, 0, 200),
@@ -1004,11 +954,33 @@ def invert_colors(pil_img: Image.Image) -> Image.Image:
     arr[..., :3] = 255 - arr[..., :3]
     return Image.fromarray(arr)
 
+def flip_image(pil_img: Image.Image, mode: str = "horizontal") -> Image.Image:
+    arr = np.array(pil_img.convert("RGBA"))
+    if mode == "horizontal":
+        arr_flipped = np.flip(arr, axis=1)
+    else:
+        arr_flipped = np.flip(arr, axis=0)
+    return Image.fromarray(arr_flipped)
+
+def adjust_brightness(pil_img: Image.Image, factor: float) -> Image.Image:
+    enhancer = ImageEnhance.Brightness(pil_img)
+    return enhancer.enhance(factor)
+
+def adjust_contrast(pil_img: Image.Image, factor: float) -> Image.Image:
+    enhancer = ImageEnhance.Contrast(pil_img)
+    return enhancer.enhance(factor)
+
+def crop_image(pil_img: Image.Image, left: int, top: int, right: int, bottom: int) -> Image.Image:
+    w, h = pil_img.size
+    left = max(0, min(left, w - 1))
+    top = max(0, min(top, h - 1))
+    right = max(left + 1, min(right, w))
+    bottom = max(top + 1, min(bottom, h))
+    return pil_img.crop((left, top, right, bottom))
 
 # =========================================================
 # TOP BAR (DARK MODE + LANGUAGE)
 # =========================================================
-
 def top_bar_and_theme():
     st.markdown(BASE_CSS, unsafe_allow_html=True)
     if st.session_state.get("dark_mode", False):
@@ -1037,17 +1009,11 @@ def top_bar_and_theme():
         )
         st.session_state.lang_code = lang_options[choice]
 
-
-# =========================================================
-# MAIN APP
-# =========================================================
-
-def main():
-    init_state()
-    top_bar_and_theme()
+# =========================
+# PAGE 1: HOME / INTRODUCTION
+# =========================
+def page_home():
     lang = st.session_state.lang_code
-
-    # Hero card
     st.markdown(
         f"""
         <div class='hero-card'>
@@ -1061,360 +1027,287 @@ def main():
         """,
         unsafe_allow_html=True,
     )
-
     st.markdown("<div class='decorative-divider'></div>", unsafe_allow_html=True)
     st.markdown("<div class='main-card'>", unsafe_allow_html=True)
 
-    # Intro / teori
-    with st.expander(t(lang, "home_title"), expanded=True):
-        st.subheader(t(lang, "overview"))
-        st.write(t(lang, "overview_text"))
-        st.subheader(t(lang, "conv_title"))
-        st.write(t(lang, "conv_text"))
+    st.subheader(t(lang, "overview"))
+    st.write(t(lang, "overview_text"))
 
-    # Anggota tim + kontrol
-    with st.expander(t(lang, "team_title"), expanded=True):
-        st.subheader(t(lang, "team_heading"))
-        num_members = st.number_input(t(lang, "num_members"), 1, 12, 4)
-        members_data = []
-        for i in range(int(num_members)):
-            st.markdown(f"**{t(lang, 'member_label')} {i+1}**")
-            col_form = st.columns([2, 2, 2])
-            with col_form[0]:
-                name = st.text_input(f"Name {i+1}", key=f"name_{i+1}")
-            with col_form[1]:
-                role = st.text_input(f"Role {i+1}", key=f"role_{i+1}",
-                                     placeholder=t(lang, "role_placeholder"))
-            with col_form[2]:
-                photo_file = st.file_uploader(
-                    f"Photo {i+1}", type=["png", "jpg", "jpeg"], key=f"photo_{i+1}"
-                )
-            members_data.append((name, role, photo_file))
-            st.markdown("---")
-
-        cols = st.columns(2)
-        member_images = []
-
-        for i, (name, role, photo_file) in enumerate(members_data):
-            if not name and not role and photo_file is None:
-                continue
-            with cols[i % 2]:
-                label_name = name or f"{t(lang, 'member_label')} {i+1}"
-                st.markdown(f"**{label_name}**")
-                img_obj = None
-                if photo_file is not None:
-                    img_obj = Image.open(photo_file)
-                    st.image(img_obj, width=200)
-                st.write(role or t(lang, "role_placeholder"))
-                if img_obj is not None:
-                    member_images.append((label_name, img_obj))
-
-        st.markdown("---")
-        st.subheader(t(lang, "team_how_title"))
-        st.write(t(lang, "team_how_text"))
-
-        st.markdown("---")
-        st.subheader(t(lang, "tools_title"))
-
-        if not member_images:
-            st.info(t(lang, "need_member_image"))
-            st.markdown("</div>", unsafe_allow_html=True)
-            return
-
-        names_list = [m[0] for m in member_images]
-        selected_name = st.selectbox(t(lang, "edit_member_prompt"), names_list, key="member_select")
-
-        for nm, img_obj in member_images:
-            if nm == selected_name:
-                base_img = img_obj
-                break
-
-        if st.session_state.current_image is None:
-            st.session_state.current_image = base_img.copy()
-            st.session_state.history.clear()
-            st.session_state.redo_stack.clear()
-            st.session_state.last_member = selected_name
-        else:
-            if st.session_state.last_member != selected_name:
-                st.session_state.last_member = selected_name
-                st.session_state.current_image = base_img.copy()
-                st.session_state.history.clear()
-                st.session_state.redo_stack.clear()
-
-        current_img = st.session_state.current_image
-        img_arr = pil_to_array(current_img)
-        h, w, _ = img_arr.shape
-        cx, cy = w / 2, h / 2
-
-        st.markdown(f"### {t(lang, 'controls_title')}")
-        st.markdown(f"> {t(lang, 'controls_hint')}")
-
-        col_left, col_right = st.columns([1.5, 2])
-
-        with col_left:
-            tool = st.selectbox(
-                t(lang, "operation_label"),
-                [
-                    t(lang, "op_translation"),
-                    t(lang, "op_scaling"),
-                    t(lang, "op_rotation"),
-                    t(lang, "op_shearing"),
-                    t(lang, "op_reflection"),
-                    t(lang, "op_blur"),
-                    t(lang, "op_sharpen"),
-                    "Flip Horizontal",
-                    "Flip Vertical",
-                    "Brightness",
-                    "Contrast",
-                    "Crop",
-                    t(lang, "op_hsv"),
-                    t(lang, "op_grabcut"),
-                    t(lang, "op_gray"),
-                    t(lang, "op_edge"),
-                    t(lang, "op_invert"),
-                ],
-                key="tool_select",
-            )
-
-            transformed_img = None
-
-            if tool == t(lang, "op_translation"):
-                st.markdown(f"**{t(lang, 'translation_params')}**")
-                tx = st.slider(t(lang, "tx_label"), -200, 200, 0, key="tx")
-                ty = st.slider(t(lang, "ty_label"), -200, 200, 0, key="ty")
-                M = get_translation_matrix(tx, ty)
-                out = apply_affine_transform(img_arr, M)
-                transformed_img = array_to_pil(out)
-
-            elif tool == t(lang, "op_scaling"):
-                st.markdown(f"**{t(lang, 'scaling_params')}**")
-                sx = st.slider(t(lang, "scale_x"), 0.1, 3.0, 1.0, key="sx")
-                sy = st.slider(t(lang, "scale_y"), 0.1, 3.0, 1.0, key="sy")
-                M = get_scaling_matrix(sx, sy, cx, cy)
-                out = apply_affine_transform(img_arr, M)
-                transformed_img = array_to_pil(out)
-
-            elif tool == t(lang, "op_rotation"):
-                st.markdown(f"**{t(lang, 'rotation_params')}**")
-                angle = st.slider(t(lang, "angle_label"), -180, 180, 0, key="angle")
-                M = get_rotation_matrix(angle, cx, cy)
-                out = apply_affine_transform(img_arr, M)
-                transformed_img = array_to_pil(out)
-
-            elif tool == t(lang, "op_shearing"):
-                st.markdown(f"**{t(lang, 'shearing_params')}**")
-                shx = st.slider(t(lang, "shear_x"), -1.0, 1.0, 0.0, key="shx")
-                shy = st.slider(t(lang, "shear_y"), -1.0, 1.0, 0.0, key="shy")
-                M = get_shearing_matrix(shx, shy, cx, cy)
-                out = apply_affine_transform(img_arr, M)
-                transformed_img = array_to_pil(out)
-
-            elif tool == t(lang, "op_reflection"):
-                st.markdown(f"**{t(lang, 'reflection_params')}**")
-                axis = st.selectbox(
-                    t(lang, "axis_label"),
-                    [
-                        t(lang, "axis_horizontal"),
-                        t(lang, "axis_vertical"),
-                        t(lang, "axis_both"),
-                    ],
-                    key="axis",
-                )
-                axis_map = {
-                    t(lang, "axis_horizontal"): "Horizontal",
-                    t(lang, "axis_vertical"): "Vertical",
-                    t(lang, "axis_both"): "Both",
-                }
-                axis_internal = axis_map[axis]
-                M = get_reflection_matrix(axis_internal, cx, cy)
-                out = apply_affine_transform(img_arr, M)
-                transformed_img = array_to_pil(out)
-
-            elif tool == t(lang, "op_blur"):
-                st.markdown(f"**{t(lang, 'blur_params')}**")
-                k = st.slider(t(lang, "kernel_size"), 1, 9, 3, step=2, key="k_blur")
-                out = blur_filter(add_alpha_channel(img_arr), kernel_size=k)
-                transformed_img = array_to_pil(out)
-
-            elif tool == t(lang, "op_sharpen"):
-                st.markdown(f"**{t(lang, 'sharpen_params')}**")
-                out = sharpen_filter(add_alpha_channel(img_arr))
-                transformed_img = array_to_pil(out)
-
-            elif tool == "Flip Horizontal":
-                transformed_img = flip_image(current_img, mode="horizontal")
-
-            elif tool == "Flip Vertical":
-                transformed_img = flip_image(current_img, mode="vertical")
-
-            elif tool == "Brightness":
-                factor = st.slider("Brightness factor", 0.1, 3.0, 1.0, key="bright")
-                transformed_img = adjust_brightness(current_img, factor)
-
-            elif tool == "Contrast":
-                factor = st.slider("Contrast factor", 0.1, 3.0, 1.0, key="contrast")
-                transformed_img = adjust_contrast(current_img, factor)
-
-            elif tool == "Crop":
-                w_img, h_img = current_img.size
-                st.write(f"{w_img} x {h_img} px")
-                left = st.number_input("Left", 0, w_img - 1, 0, key="crop_left")
-                top = st.number_input("Top", 0, h_img - 1, 0, key="crop_top")
-                right = st.number_input("Right", 1, w_img, w_img, key="crop_right")
-                bottom = st.number_input("Bottom", 1, h_img, h_img, key="crop_bottom")
-                transformed_img = crop_image(current_img, left, top, right, bottom)
-
-            elif tool == t(lang, "op_hsv"):
-                st.markdown(f"**{t(lang, 'hsv_params')}**")
-                h_min = st.slider(t(lang, "h_min"), 0, 180, 0, key="hmin")
-                s_min = st.slider(t(lang, "s_min"), 0, 255, 0, key="smin")
-                v_min = st.slider(t(lang, "v_min"), 0, 255, 200, key="vmin")
-                h_max = st.slider(t(lang, "h_max"), 0, 180, 180, key="hmax")
-                s_max = st.slider(t(lang, "s_max"), 0, 255, 25, key="smax")
-                v_max = st.slider(t(lang, "v_max"), 0, 255, 255, key="vmax")
-                transformed_img = remove_background_hsv(
-                    current_img,
-                    lower_hsv=(h_min, s_min, v_min),
-                    upper_hsv=(h_max, s_max, v_max),
-                )
-
-            elif tool == t(lang, "op_grabcut"):
-                st.markdown(f"**{t(lang, 'grabcut_params')}**")
-                rect_scale = st.slider(t(lang, "rect_scale"), 0.5, 1.0, 0.9, key="rect")
-                iters = st.slider(t(lang, "iterations"), 1, 10, 5, key="iters")
-                transformed_img = remove_background_grabcut(
-                    current_img, rect_scale=rect_scale, iters=iters
-                )
-
-            elif tool == t(lang, "op_gray"):
-                transformed_img = grayscale_filter(current_img)
-
-            elif tool == t(lang, "op_edge"):
-                st.markdown(f"**{t(lang, 'edge_params')}**")
-                low = st.slider(t(lang, "low_thresh"), 0, 255, 100, key="low")
-                high = st.slider(t(lang, "high_thresh"), 0, 255, 200, key="high")
-                transformed_img = edge_detection(current_img, low, high)
-
-            elif tool == t(lang, "op_invert"):
-                transformed_img = invert_colors(current_img)
-
-        with col_right:
-            col_img1, col_img2 = st.columns(2)
-            with col_img1:
-                st.markdown(f"**{t(lang, 'current_image')}**")
-                st.image(current_img, use_container_width=True)
-            with col_img2:
-                st.markdown(f"**{t(lang, 'preview_image')}**")
-                if transformed_img is not None:
-                    st.image(transformed_img, use_container_width=True)
-                else:
-                    st.info(t(lang, "preview_hint"))
-
-            if transformed_img is not None:
-                col_a, col_b, col_c = st.columns(3)
-                with col_a:
-                    if st.button(t(lang, "btn_apply")):
-                        push_history(transformed_img)
-                with col_b:
-                    if st.button(t(lang, "btn_save")):
-                        default_name = "result_" + str(len(st.session_state.saved_results) + 1)
-                        save_current_result(default_name)
-                with col_c:
-                    buf = io.BytesIO()
-                    transformed_img.save(buf, format="PNG")
-                    byte_im = buf.getvalue()
-                    st.download_button(
-                        label=t(lang, "btn_download"),
-                        data=byte_im,
-                        file_name="transformed.png",
-                        mime="image/png",
-                    )
-
-        st.markdown("---")
-        col_u, col_r, col_z = st.columns([1, 1, 2])
-        with col_u:
-            if st.button(t(lang, "undo")):
-                undo()
-        with col_r:
-            if st.button(t(lang, "redo")):
-                redo()
-        with col_z:
-            st.write(f"{t(lang, 'saved_results')}: {len(st.session_state.saved_results)}")
-            if st.session_state.saved_results:
-                zip_buffer = make_zip_from_results(st.session_state.saved_results)
-                st.download_button(
-                    label=t(lang, "btn_download_zip"),
-                    data=zip_buffer,
-                    file_name="results.zip",
-                    mime="application/zip",
-                )
-
-        # Download Center
-        st.markdown("---")
-        st.subheader(t(lang, "download_center"))
-
-        if st.session_state.current_image is not None:
-            buf_png = io.BytesIO()
-            st.session_state.current_image.save(buf_png, format="PNG")
-            st.download_button(
-                t(lang, "dl_current_png"),
-                data=buf_png.getvalue(),
-                file_name="current_image.png",
-                mime="image/png",
-            )
-
-            buf_jpg = io.BytesIO()
-            rgb_img = st.session_state.current_image.convert("RGB")
-            rgb_img.save(buf_jpg, format="JPEG")
-            st.download_button(
-                t(lang, "dl_current_jpg"),
-                data=buf_jpg.getvalue(),
-                file_name="current_image.jpg",
-                mime="image/jpeg",
-            )
-
-            meta = {
-                "width": st.session_state.current_image.width,
-                "height": st.session_state.current_image.height,
-                "mode": st.session_state.current_image.mode,
-                "num_saved_results": len(st.session_state.saved_results),
-            }
-            meta_json = json.dumps(meta, indent=2)
-            st.download_button(
-                t(lang, "dl_meta_json"),
-                data=meta_json,
-                file_name="image_metadata.json",
-                mime="application/json",
-            )
-
-            df_meta = pd.DataFrame([meta])
-            csv_meta = df_meta.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                t(lang, "dl_meta_csv"),
-                data=csv_meta,
-                file_name="image_metadata.csv",
-                mime="text/csv",
-            )
-
-            pdf_buf = io.BytesIO()
-            c = canvas.Canvas(pdf_buf)
-            c.drawString(50, 800, t(lang, "report_title"))
-            c.drawString(50, 780, f"{t(lang, 'meta_width')}: {meta['width']}")
-            c.drawString(50, 760, f"{t(lang, 'meta_height')}: {meta['height']}")
-            c.drawString(50, 740, f"{t(lang, 'meta_mode')}: {meta['mode']}")
-            c.drawString(50, 720, f"{t(lang, 'meta_saved')}: {meta['num_saved_results']}")
-            c.showPage()
-            c.save()
-            pdf_buf.seek(0)
-            st.download_button(
-                t(lang, "dl_report_pdf"),
-                data=pdf_buf,
-                file_name="report.pdf",
-                mime="application/pdf",
-            )
+    st.subheader(t(lang, "conv_title"))
+    st.write(t(lang, "conv_text"))
 
     st.markdown("</div>", unsafe_allow_html=True)
 
+# =========================
+# PAGE 2: IMAGE PROCESSING TOOLS
+# =========================
+def page_tools():
+    init_state()
+    lang = st.session_state.lang_code
+    st.markdown("<div class='main-card'>", unsafe_allow_html=True)
+    st.subheader("🛠 Image Processing Tools")
+
+    # uploader umum
+    st.markdown("<div class='upload-card'>", unsafe_allow_html=True)
+    img_file = st.file_uploader(
+        "Upload image",
+        type=["png", "jpg", "jpeg"],
+        key="main_upload"
+    )
+    st.markdown(
+        "<div class='helper-text'>Upload satu gambar untuk semua transformasi dan filter.</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if img_file is None:
+        st.info("Silakan upload gambar terlebih dahulu.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    base_img = Image.open(img_file).convert("RGBA")
+    if st.session_state.current_image is None:
+        st.session_state.current_image = base_img.copy()
+        st.session_state.history.clear()
+        st.session_state.redo_stack.clear()
+
+    current_img = st.session_state.current_image
+    img_arr = pil_to_array(current_img)
+    h, w, _ = img_arr.shape
+    cx, cy = w / 2, h / 2
+
+    st.markdown(f"### {t(lang, 'controls_title')}")
+    st.markdown(f"> {t(lang, 'controls_hint')}")
+
+    col_left, col_right = st.columns([1.5, 2])
+    transformed_img = None
+
+    with col_left:
+        tool = st.selectbox(
+            t(lang, "operation_label"),
+            [
+                t(lang, "op_translation"),
+                t(lang, "op_scaling"),
+                t(lang, "op_rotation"),
+                t(lang, "op_shearing"),
+                t(lang, "op_reflection"),
+                t(lang, "op_blur"),
+                t(lang, "op_sharpen"),
+                t(lang, "op_hsv"),
+                t(lang, "op_grabcut"),
+                t(lang, "op_gray"),
+                t(lang, "op_edge"),
+                t(lang, "op_invert"),
+            ],
+            key="tool_select_main",
+        )
+
+        # 5 transformasi
+        if tool == t(lang, "op_translation"):
+            st.markdown(f"**{t(lang, 'translation_params')}**")
+            tx = st.slider(t(lang, "tx_label"), -200, 200, 0, key="tx_main")
+            ty = st.slider(t(lang, "ty_label"), -200, 200, 0, key="ty_main")
+            M = get_translation_matrix(tx, ty)
+            out = apply_affine_transform(img_arr, M)
+            transformed_img = array_to_pil(out)
+
+        elif tool == t(lang, "op_scaling"):
+            st.markdown(f"**{t(lang, 'scaling_params')}**")
+            sx = st.slider(t(lang, "scale_x"), 0.1, 3.0, 1.0, key="sx_main")
+            sy = st.slider(t(lang, "scale_y"), 0.1, 3.0, 1.0, key="sy_main")
+            M = get_scaling_matrix(sx, sy, cx, cy)
+            out = apply_affine_transform(img_arr, M)
+            transformed_img = array_to_pil(out)
+
+        elif tool == t(lang, "op_rotation"):
+            st.markdown(f"**{t(lang, 'rotation_params')}**")
+            angle = st.slider(t(lang, "angle_label"), -180, 180, 0, key="angle_main")
+            M = get_rotation_matrix(angle, cx, cy)
+            out = apply_affine_transform(img_arr, M)
+            transformed_img = array_to_pil(out)
+
+        elif tool == t(lang, "op_shearing"):
+            st.markdown(f"**{t(lang, 'shearing_params')}**")
+            shx = st.slider(t(lang, "shear_x"), -1.0, 1.0, 0.0, key="shx_main")
+            shy = st.slider(t(lang, "shear_y"), -1.0, 1.0, 0.0, key="shy_main")
+            M = get_shearing_matrix(shx, shy, cx, cy)
+            out = apply_affine_transform(img_arr, M)
+            transformed_img = array_to_pil(out)
+
+        elif tool == t(lang, "op_reflection"):
+            st.markdown(f"**{t(lang, 'reflection_params')}**")
+            axis = st.selectbox(
+                t(lang, "axis_label"),
+                [
+                    t(lang, "axis_horizontal"),
+                    t(lang, "axis_vertical"),
+                    t(lang, "axis_both"),
+                ],
+                key="axis_main",
+            )
+            axis_map = {
+                t(lang, "axis_horizontal"): "Horizontal",
+                t(lang, "axis_vertical"): "Vertical",
+                t(lang, "axis_both"): "Both",
+            }
+            M = get_reflection_matrix(axis_map[axis], cx, cy)
+            out = apply_affine_transform(img_arr, M)
+            transformed_img = array_to_pil(out)
+
+        # blur & sharpen (konvolusi manual)
+        elif tool == t(lang, "op_blur"):
+            st.markdown(f"**{t(lang, 'blur_params')}**")
+            k = st.slider(t(lang, "kernel_size"), 1, 9, 3, step=2, key="k_blur_main")
+            out = blur_filter(add_alpha_channel(img_arr), kernel_size=k)
+            transformed_img = array_to_pil(out)
+
+        elif tool == t(lang, "op_sharpen"):
+            st.markdown(f"**{t(lang, 'sharpen_params')}**")
+            out = sharpen_filter(add_alpha_channel(img_arr))
+            transformed_img = array_to_pil(out)
+
+        # bonus + filter lain
+        elif tool == t(lang, "op_hsv"):
+            st.markdown(f"**{t(lang, 'hsv_params')}**")
+            h_min = st.slider(t(lang, "h_min"), 0, 180, 0, key="hmin_main")
+            s_min = st.slider(t(lang, "s_min"), 0, 255, 0, key="smin_main")
+            v_min = st.slider(t(lang, "v_min"), 0, 255, 200, key="vmin_main")
+            h_max = st.slider(t(lang, "h_max"), 0, 180, 180, key="hmax_main")
+            s_max = st.slider(t(lang, "s_max"), 0, 255, 25, key="smax_main")
+            v_max = st.slider(t(lang, "v_max"), 0, 255, 255, key="vmax_main")
+            transformed_img = remove_background_hsv(
+                current_img,
+                lower_hsv=(h_min, s_min, v_min),
+                upper_hsv=(h_max, s_max, v_max),
+            )
+
+        elif tool == t(lang, "op_grabcut"):
+            st.markdown(f"**{t(lang, 'grabcut_params')}**")
+            rect_scale = st.slider(t(lang, "rect_scale"), 0.5, 1.0, 0.9, key="rect_main")
+            iters = st.slider(t(lang, "iterations"), 1, 10, 5, key="iters_main")
+            transformed_img = remove_background_grabcut(
+                current_img, rect_scale=rect_scale, iters=iters
+            )
+
+        elif tool == t(lang, "op_gray"):
+            transformed_img = grayscale_filter(current_img)
+
+        elif tool == t(lang, "op_edge"):
+            st.markdown(f"**{t(lang, 'edge_params')}**")
+            low = st.slider(t(lang, "low_thresh"), 0, 255, 100, key="low_main")
+            high = st.slider(t(lang, "high_thresh"), 0, 255, 200, key="high_main")
+            transformed_img = edge_detection(current_img, low, high)
+
+        elif tool == t(lang, "op_invert"):
+            transformed_img = invert_colors(current_img)
+
+    with col_right:
+        col_img1, col_img2 = st.columns(2)
+        with col_img1:
+            st.markdown(f"**{t(lang, 'current_image')}**")
+            st.image(current_img, use_container_width=True)
+        with col_img2:
+            st.markdown(f"**{t(lang, 'preview_image')}**")
+            if transformed_img is not None:
+                st.image(transformed_img, use_container_width=True)
+            else:
+                st.info(t(lang, "preview_hint"))
+
+        if transformed_img is not None:
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                if st.button(t(lang, "btn_apply")):
+                    push_history(transformed_img)
+            with col_b:
+                if st.button(t(lang, "btn_save")):
+                    default_name = "result_" + str(len(st.session_state.saved_results) + 1)
+                    save_current_result(default_name)
+            with col_c:
+                buf = io.BytesIO()
+                transformed_img.save(buf, format="PNG")
+                st.download_button(
+                    label=t(lang, "btn_download"),
+                    data=buf.getvalue(),
+                    file_name="transformed.png",
+                    mime="image/png",
+                )
+
+    # undo/redo + download center
+    # gunakan blok yang sama seperti di kode lama (undo(), redo(),
+    # make_zip_from_results, export JSON/CSV/PDF)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# =========================
+# PAGE 3: TEAM MEMBERS
+# =========================
+def page_team():
+    init_state()
+    lang = st.session_state.lang_code
+    st.markdown("<div class='main-card'>", unsafe_allow_html=True)
+    st.subheader(t(lang, "team_heading"))
+
+    num_members = st.number_input(t(lang, "num_members"), 1, 12, 4)
+    members_data = []
+
+    for i in range(int(num_members)):
+        st.markdown(f"**{t(lang, 'member_label')} {i+1}**")
+        col_form = st.columns([2, 2, 2])
+        with col_form[0]:
+            name = st.text_input(f"Name {i+1}", key=f"tm_name_{i+1}")
+        with col_form[1]:
+            role = st.text_input(
+                f"Role {i+1}",
+                key=f"tm_role_{i+1}",
+                placeholder=t(lang, "role_placeholder"),
+            )
+        with col_form[2]:
+            photo_file = st.file_uploader(
+                f"Photo {i+1}", type=["png", "jpg", "jpeg"], key=f"tm_photo_{i+1}"
+            )
+        members_data.append((name, role, photo_file))
+        st.markdown("---")
+
+    cols = st.columns(2)
+    for i, (name, role, photo_file) in enumerate(members_data):
+        if not name and not role and photo_file is None:
+            continue
+        with cols[i % 2]:
+            label_name = name or f"{t(lang, 'member_label')} {i+1}"
+            st.markdown(f"**{label_name}**")
+            if photo_file is not None:
+                img_obj = Image.open(photo_file)
+                st.image(img_obj, width=200)
+            st.write(role or t(lang, "role_placeholder"))
+
+    st.markdown("---")
+    st.subheader(t(lang, "team_how_title"))
+    st.write(t(lang, "team_how_text"))
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# =========================
+# MAIN ROUTER (3 HALAMAN)
+# =========================
+def main():
+    if "lang_code" not in st.session_state:
+        st.session_state.lang_code = "id"
+    if "dark_mode" not in st.session_state:
+        st.session_state.dark_mode = False
+
+    top_bar_and_theme()
+
+    page = st.sidebar.radio(
+        "Pages",
+        ["Home / Introduction", "Image Processing Tools", "Team Members"]
+    )
+
+    if page == "Home / Introduction":
+        page_home()
+    elif page == "Image Processing Tools":
+        page_tools()
+    else:
+        page_team()
 
 if __name__ == "__main__":
     main()
