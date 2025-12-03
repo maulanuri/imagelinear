@@ -1,4 +1,10 @@
 streamlit
+pandas
 numpy
-Pillow
+scipy
+matplotlib
+seaborn
+nltk
+reportlab
 opencv-python-headless
+pillow
