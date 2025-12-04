@@ -2,6 +2,8 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import html
+import streamlit.components.v1 as components
 
 # =========================
 # Konfigurasi halaman
@@ -12,8 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
-ACCENT_COLOR = "#10B981"  # hijau utama
-
+ACCENT_COLOR = "#10B981"  # hijau utama (emerald)
 # Sedikit custom CSS untuk tema hijau & layout
 st.markdown(
     f"""
@@ -87,8 +88,12 @@ def shearing_matrix(shx, shy):
 
 def reflection_matrix(mode):
     """
-    Matriks refleksi 3x3 untuk beberapa kasus:
-    - x_axis, y_axis, y_eq_x, origin, none
+    Matriks refleksi 3x3:
+    - Tidak ada
+    - Terhadap sumbu x
+    - Terhadap sumbu y
+    - Terhadap garis y = x
+    - Terhadap titik asal (0,0)
     """
     if mode == "Terhadap sumbu x":
         return np.array([
@@ -123,19 +128,19 @@ def apply_transform(points_xy, M):
     Terapkan transformasi homogen 3x3 pada array titik (N,2).
     Mengembalikan array (N,2) hasil transformasi.
     """
-    # Konversi ke koordinat homogen (x, y, 1)
     ones = np.ones((points_xy.shape[0], 1))
     pts_h = np.hstack([points_xy, ones])  # (N,3)
-    # Perkalian M @ p_h^T -> (3,3) @ (3,N) -> (3,N)
-    pts_trans_h = (M @ pts_h.T).T  # (N,3)
-    # Kembali ke koordinat Kartesius
+    pts_trans_h = (M @ pts_h.T).T         # (N,3)
     pts_trans_xy = pts_trans_h[:, :2] / pts_trans_h[:, 2][:, np.newaxis]
     return pts_trans_xy
 
+# =========================
+# Bentuk dasar
+# =========================
+
 def square_points():
     """
-    Persegi satuan dengan titik ditutup (titik awal = titik akhir)
-    urutan: A(0,0) -> B(1,0) -> C(1,1) -> D(0,1) -> A(0,0)
+    Persegi satuan dengan titik ditutup A→B→C→D→A.
     """
     pts = np.array([
         [0, 0],
@@ -149,7 +154,7 @@ def square_points():
 
 def triangle_points():
     """
-    Segitiga dengan koordinat sederhana.
+    Segitiga sederhana.
     """
     pts = np.array([
         [0, 0],
@@ -160,25 +165,107 @@ def triangle_points():
     labels = ["A", "B", "C", "A"]
     return pts, labels
 
+def regular_polygon_points(n_sides=5, radius=1.0, center=(0.0, 0.0)):
+    """
+    Menghasilkan titik-titik poligon beraturan dengan n_sides.
+    Titik terakhir = titik pertama untuk menutup poligon.
+    """
+    cx, cy = center
+    angles = np.linspace(0, 2 * np.pi, n_sides, endpoint=False)
+    x = cx + radius * np.cos(angles)
+    y = cy + radius * np.sin(angles)
+    pts = np.vstack([x, y]).T
+    pts = np.vstack([pts, pts[0]])  # tutup poligon
+    labels = [chr(ord("A") + i) for i in range(n_sides)] + ["A"]
+    return pts, labels
+
+# =========================
+# Utilitas tampilan matriks & SVG
+# =========================
+
 def format_matrix_html(M, title="Matriks"):
     """Format matriks 3x3 menjadi HTML sederhana."""
-    html = f"<b>{title}</b><br><table>"
+    html_str = f"<b>{title}</b><br><table>"
     for row in M:
-        html += "<tr>" + "".join(f"<td style='padding:2px 8px;'>{val: .3f}</td>" for val in row) + "</tr>"
-    html += "</table>"
-    return html
+        html_str += "<tr>" + "".join(
+            f"<td style='padding:2px 8px;'>{val: .3f}</td>" for val in row
+        ) + "</tr>"
+    html_str += "</table>"
+    return html_str
+
+def polygon_to_svg(points_xy, width=240, height=240, padding=20, stroke_color="#10B981"):
+    """
+    Menghasilkan string HTML <svg> sederhana untuk preview bentuk 2D.
+    Hanya menggambar bentuk hasil transformasi (polyline tertutup).
+    """
+    if points_xy.shape[0] == 0:
+        return f"<svg width='{width}' height='{height}'></svg>"
+
+    xs = points_xy[:, 0]
+    ys = points_xy[:, 1]
+
+    min_x, max_x = xs.min(), xs.max()
+    min_y, max_y = ys.min(), ys.max()
+
+    span_x = max(max_x - min_x, 1e-6)
+    span_y = max(max_y - min_y, 1e-6)
+
+    scale = min(
+        (width - 2 * padding) / span_x,
+        (height - 2 * padding) / span_y
+    )
+
+    svg_points = []
+    for x, y in points_xy:
+        sx = padding + (x - min_x) * scale
+        sy = height - (padding + (y - min_y) * scale)
+        svg_points.append(f"{sx:.2f},{sy:.2f}")
+
+    points_str = " ".join(svg_points)
+    points_str = html.escape(points_str)
+
+    svg = f"""
+    <svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="{width}" height="{height}" fill="white" />
+        <polyline points="{points_str}"
+                  fill="none"
+                  stroke="{stroke_color}"
+                  stroke-width="2" />
+    </svg>
+    """
+    return svg
 
 # =========================
 # Sidebar: kontrol
 # =========================
+
 with st.sidebar:
     st.title("Kontrol Transformasi")
 
     st.markdown("### Bentuk Dasar")
     shape_type = st.radio(
         "Pilih bentuk:",
-        ["Persegi", "Segitiga"]
+        ["Persegi", "Segitiga", "Poligon beraturan"]
     )
+
+    if shape_type == "Poligon beraturan":
+        n_sides = st.slider(
+            "Jumlah sisi poligon",
+            min_value=3,
+            max_value=20,
+            value=5,
+            step=1
+        )
+        radius = st.number_input(
+            "Radius poligon",
+            min_value=0.1,
+            max_value=5.0,
+            value=1.0,
+            step=0.1
+        )
+    else:
+        n_sides = None
+        radius = None
 
     st.markdown("---")
     st.markdown("### Translation")
@@ -210,7 +297,6 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### Urutan Komposisi")
-
     sequence_label = st.selectbox(
         "Pilih urutan transformasi",
         [
@@ -234,7 +320,6 @@ R = rotation_matrix(theta)
 H = shearing_matrix(shx, shy)
 F = reflection_matrix(reflection_mode)
 
-# Tentukan urutan komposisi berdasarkan pilihan
 mapping = {
     "Translation → Rotation → Scaling → Shearing → Reflection": ["T", "R", "S", "H", "F"],
     "Rotation → Scaling → Translation → Shearing → Reflection": ["R", "S", "T", "H", "F"],
@@ -242,7 +327,6 @@ mapping = {
     "Shearing → Scaling → Rotation → Translation → Reflection": ["H", "S", "R", "T", "F"],
     "Reflection → Rotation → Scaling → Translation → Shearing": ["F", "R", "S", "T", "H"],
 }
-
 order = mapping[sequence_label]
 
 symbol_to_matrix = {
@@ -263,8 +347,14 @@ for symbol in order:
 
 if shape_type == "Persegi":
     pts, labels = square_points()
-else:
+elif shape_type == "Segitiga":
     pts, labels = triangle_points()
+else:  # Poligon beraturan
+    pts, labels = regular_polygon_points(
+        n_sides=int(n_sides),
+        radius=radius,
+        center=(0.0, 0.0)
+    )
 
 pts_trans = apply_transform(pts, M_composite)
 
@@ -275,17 +365,17 @@ pts_trans = apply_transform(pts, M_composite)
 st.title("Aplikasi Interaktif Transformasi 2D (Koordinat Homogen 3×3)")
 st.markdown(
     """
-Aplikasi ini membantu mahasiswa memahami bagaimana berbagai transformasi 2D 
-(translation, scaling, rotation, shearing, dan reflection) direpresentasikan dengan 
-matriks 3×3 pada sistem koordinat homogen dan bagaimana matriks-matriks ini dapat 
-diklikan (dikomposisikan) menjadi satu transformasi komposit.
+Aplikasi ini mendemonstrasikan bagaimana translation, scaling, rotation, shearing, 
+dan reflection pada 2D direpresentasikan dengan matriks 3×3 dalam koordinat homogen, 
+serta bagaimana transformasi-transformasi tersebut dapat dikomposisikan menjadi satu 
+matriks komposit.
 """
 )
 
 col_plot, col_info = st.columns([2, 1])
 
 # -------------------------
-# Plot bentuk sebelum & sesudah
+# Plot Matplotlib
 # -------------------------
 with col_plot:
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -304,11 +394,9 @@ with col_plot:
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_title("Bentuk Sebelum dan Sesudah Transformasi")
-
     if show_grid:
         ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
 
-    # Sesuaikan batas agar kedua bentuk terlihat
     all_x = np.concatenate([pts[:, 0], pts_trans[:, 0]])
     all_y = np.concatenate([pts[:, 1], pts_trans[:, 1]])
     margin = 1.0
@@ -324,7 +412,6 @@ with col_plot:
 # -------------------------
 with col_info:
     st.subheader("Matriks Transformasi 3×3")
-
     st.markdown(format_matrix_html(T, "Translation T"), unsafe_allow_html=True)
     st.markdown(format_matrix_html(S, "Scaling S"), unsafe_allow_html=True)
     st.markdown(format_matrix_html(R, "Rotation R"), unsafe_allow_html=True)
@@ -335,6 +422,27 @@ with col_info:
     st.markdown(f"**Urutan komposisi dipilih:** {sequence_label}")
     st.markdown(f"**Notasi urutan:** {' → '.join(order)}")
     st.markdown(format_matrix_html(M_composite, "Matriks Komposit M"), unsafe_allow_html=True)
+
+# =========================
+# Preview SVG ringan
+# =========================
+
+st.markdown("## Preview Cepat (SVG)")
+
+col_svg, col_caption = st.columns([1, 1])
+
+with col_svg:
+    svg_html = polygon_to_svg(pts_trans, width=260, height=260, padding=24, stroke_color=ACCENT_COLOR)
+    components.html(svg_html, height=280)
+
+with col_caption:
+    st.markdown(
+        """
+Preview ini menggambar bentuk akhir dalam SVG sederhana sehingga terasa ringan 
+saat parameter diubah, sementara plot Matplotlib tetap menyediakan visualisasi 
+lengkap dengan grid dan label titik.
+"""
+    )
 
 # =========================
 # Tabel koordinat
@@ -366,8 +474,8 @@ with col_after:
 
 st.markdown(
     """
-Gunakan slider dan input di sidebar untuk mengubah parameter transformasi, 
-lalu perhatikan bagaimana bentuk, matriks, dan koordinat titik berubah sesuai 
-dengan konsep komposisi transformasi pada koordinat homogen 3×3.
+Gunakan kontrol di sidebar untuk mengubah parameter transformasi dan urutan komposisi, 
+lalu amati bagaimana matriks, koordinat, dan bentuk pada bidang 2D ikut berubah sesuai 
+konsep transformasi linear dan koordinat homogen 3×3.
 """
 )
